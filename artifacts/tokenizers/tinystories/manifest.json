@@ -1,0 +1,27 @@
+{
+  "artifact": "tinystories",
+  "origin": "Existing locally trained tokenizer artifacts from CS336 Assignment 1 work.",
+  "metrics_note": "Historical measurements; not rerun during extraction. Local absolute input paths normalized to data/<filename>.",
+  "files": {
+    "merges.txt": {
+      "bytes": 183442,
+      "sha256": "3bba0ba095082dea6b4d7c17393ee9d9d94f25558960d593c99bca6726aa04b1"
+    },
+    "tinystories_merges.pkl": {
+      "bytes": 109716,
+      "sha256": "f3d1232740294d5c69b8580e35e68edf90e82f7c779a5a8ebec8fb0f7df6ae70"
+    },
+    "tinystories_vocab.pkl": {
+      "bytes": 117702,
+      "sha256": "b9a3565b55d0b16c03a7fd876296207084932b799923418055c7d48cacb7b7ea"
+    },
+    "training_metrics.json": {
+      "bytes": 725,
+      "sha256": "23fbeaf83a4c5fc10f32a48bd672dbbbbb93c73b15c13e8a5a73889d67f57d30"
+    },
+    "vocab.txt": {
+      "bytes": 147508,
+      "sha256": "fc6f020bf64c242de863b1d05bdd5b12cd73febbd41d5131ede30bc19c0bf21e"
+    }
+  }
+}

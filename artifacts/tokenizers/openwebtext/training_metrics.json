@@ -1,0 +1,29 @@
+{
+  "compute_seconds": 2784.264346109969,
+  "checkpoint_seconds": 24.78731929200012,
+  "finished": true,
+  "peak_sampled_process_tree_rss_bytes": 22397333504,
+  "memory_sampling_errors": [],
+  "identity": {
+    "format": "cs336-owt-incremental-resume-v2",
+    "dataset_sha256": "bbeb7f291a981ecfd5cf44b84d0f654b9e96c53dff99f2556b7d2cccaf8c1918",
+    "dataset_bytes": 11920511059,
+    "dataset_source": "https://huggingface.co/datasets/stanford-cs336/owt-sample/resolve/main/owt_train.txt.gz",
+    "vocab_size": 32000,
+    "special_tokens": [
+      "<|endoftext|>"
+    ],
+    "workers": 4,
+    "original_source_sha256": "3598ab24aae79e425e003df561045127cc556b57e6d42f1c7fd483dd0d86d891",
+    "runner_sha256": "29fc9995b303dc97ad6d75e7c3acf665a1aca789ed254dc68726617ae5c35f44",
+    "regex_version": "2026.3.32",
+    "python_version": [
+      3,
+      13
+    ]
+  },
+  "actual_vocab_size": 32000,
+  "merge_count": 31743,
+  "timing_measurement": "Cumulative completed preprocessing/merge wall seconds across saved progress; excludes downloads, hashing, loading, checkpoint I/O and time lost after the last checkpoint. Checkpoint seconds include sequence snapshot construction and serialization/copy/readback but exclude cleanup and completion-record publication.",
+  "memory_measurement": "Max sampled sum of parent and descendant RSS every 0.1s across saved sessions. May miss brief peaks, double-count shared pages; excludes checkpoint loading. Inspect memory_sampling_errors. Not an exact peak."
+}

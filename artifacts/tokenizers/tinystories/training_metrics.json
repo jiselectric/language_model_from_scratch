@@ -1,0 +1,20 @@
+{
+  "input_path": "data/TinyStoriesV2-GPT4-train.txt",
+  "input_bytes": 2227753162,
+  "requested_vocab_size": 10000,
+  "actual_vocab_size": 10000,
+  "merge_count": 9743,
+  "workers": 4,
+  "special_tokens": [
+    "<|endoftext|>"
+  ],
+  "training_seconds": 780.5176057920326,
+  "peak_sampled_process_tree_rss_bytes": 3273048064,
+  "memory_sampling_errors": [],
+  "memory_measurement": "Maximum sampled sum of parent and descendant RSS, every 0.1s; may miss brief peaks and count shared pages more than once.",
+  "longest_token_id": 7160,
+  "longest_token_length_bytes": 15,
+  "longest_token_bytes_repr": "b' accomplishment'",
+  "longest_token_hex": "206163636f6d706c6973686d656e74",
+  "longest_token_text": " accomplishment"
+}

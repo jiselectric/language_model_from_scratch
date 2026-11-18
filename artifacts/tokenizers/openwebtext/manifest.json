@@ -1,0 +1,28 @@
+{
+  "artifact": "openwebtext",
+  "origin": "Existing locally trained tokenizer artifacts from CS336 Assignment 1 work.",
+  "metrics_note": "Historical measurements; not rerun during extraction. Local absolute input paths normalized to data/<filename>.",
+  "files": {
+    "merges.txt": {
+      "bytes": 639834,
+      "sha256": "b10e9b96f5f475f3c7559fdc9f6bb16fc195ea5410727227b6c775c230ba8262"
+    },
+    "owt_merges.pkl": {
+      "bytes": 389912,
+      "sha256": "3c8fdd506e2145f5b675b1dbb94fe2b10fecd46cb3f01b4f0e12fd2a6005110a"
+    },
+    "owt_vocab.pkl": {
+      "bytes": 394665,
+      "sha256": "2dd36205a009a46cadbc1d114087942ed411c4176f5c0e84d5881544961a85b9"
+    },
+    "training_metrics.json": {
+      "bytes": 1496,
+      "sha256": "dfb4bceec49b3b5be694a98a2ce88b08d75ec36e46c39af609f13c30ef2236a6"
+    },
+    "vocab.txt": {
+      "bytes": 516157,
+      "sha256": "5193b566b77d54de3af10673b0eda4a31f9204a53a2aa46e7c221c29d4ee2a50"
+    }
+  },
+  "provenance_note": "Metrics identify a separate incremental resume runner that is not included in this repository. The included trainer does not provide resume support."
+}
