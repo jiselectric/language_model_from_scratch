@@ -1,6 +1,8 @@
 import torch
 
-def softmax(x: torch.Tensor, i: int) -> torch.tensor:
-    shifted = x - x.max(dim=i, keepdim=True).values
+
+def softmax(x: torch.Tensor, dim: int) -> torch.Tensor:
+    """Normalize along dim after shifting finite logits to avoid overflow."""
+    shifted = x - x.max(dim=dim, keepdim=True).values
     exp_values = shifted.exp()
-    return exp_values / exp_values.sum(dim=i, keepdim=True)
+    return exp_values / exp_values.sum(dim=dim, keepdim=True)

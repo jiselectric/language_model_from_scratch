@@ -1,7 +1,6 @@
 import numpy
 import torch
 import torch.nn.functional as F
-from torch.nn.utils.clip_grad import clip_grad_norm_
 
 from .adapters import run_softmax
 
@@ -22,4 +21,3 @@ def test_softmax_matches_pytorch():
         expected.detach().numpy(),
         atol=1e-5,
     )
-

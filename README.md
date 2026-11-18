@@ -7,9 +7,9 @@ A growing Python/PyTorch implementation developed while studying [Stanford CS336
 ```text
 src/lm_from_scratch/
   model/                     # Layers, attention, rotary embeddings, and Transformer
-  tokenization/              # Byte-level BPE trainer and tokenizer
+  tokenization/              # BPE training, tokenization, and corpus encoding
 tests/
-  unit/                      # Incremental BPE regression tests
+  unit/                      # Model validation, corpus encoding, and BPE regression tests
   cs336/assignment1/          # Adapted course tests, adapters, fixtures, and snapshots
 artifacts/tokenizers/
   tinystories/               # 10,000-token vocabulary, merges, and recorded metrics
@@ -38,8 +38,13 @@ import torch
 from lm_from_scratch.model.transformer import TransformerLM
 
 model = TransformerLM(
-    vocab_size=10000, context_length=128, d_model=64,
-    num_layers=2, num_heads=4, d_ff=128, rope_theta=10000.0,
+    vocab_size=10000,
+    context_length=128,
+    d_model=64,
+    num_layers=2,
+    num_heads=4,
+    d_ff=128,
+    rope_theta=10000.0,
 )
 token_ids = torch.randint(0, 10000, (2, 16))
 logits = model(token_ids)  # (batch, sequence, vocabulary)
@@ -70,7 +75,19 @@ uv run python -m lm_from_scratch.tokenization.train_bpe \
   --output-dir artifacts/tokenizers/local
 ```
 
-The training command reserves `<|endoftext|>` and writes pickle artifacts plus metrics. The tokenizer also offers `encode_iterable` for text supplied in chunks. Raw datasets and model checkpoints are excluded from Git. Small course test fixtures are included to make verification reproducible.
+To encode a local corpus using the saved TinyStories tokenizer:
+
+```bash
+uv run python -m lm_from_scratch.tokenization.encode_corpus \
+  --vocab artifacts/tokenizers/tinystories/tinystories_vocab.pkl \
+  --merges artifacts/tokenizers/tinystories/tinystories_merges.pkl \
+  --special-token '<|endoftext|>' \
+  --input data/corpus.txt --output data/tokens.bin
+```
+
+The encoder streams token IDs into a little-endian `uint16` file and checks that the vocabulary fits that format.
+
+The training command reserves `<|endoftext|>` and writes pickle artifacts plus metrics. The tokenizer also offers `encode_iterable` for text supplied in chunks. Raw datasets and model checkpoints are excluded from Git. Course text fixtures and a small reference model checkpoint are included to make verification reproducible.
 
 Metrics describe previous runs, not benchmarks of this extracted package. TinyStories input paths are normalized to remove machine-specific directories. OpenWebText metrics identify a separate incremental resume runner that is not included here; the included trainer does not implement resume support. Dataset identifiers and available historical hashes are retained in the metadata.
 

@@ -1,7 +1,7 @@
 """Guard merge semantics when replacing full rescans with incremental updates."""
 
-from collections import Counter
 import random
+from collections import Counter
 
 import pytest
 
@@ -48,7 +48,7 @@ def _rescan_reference(path, target):
             result = []
             i = 0
             while i < len(pieces):
-                if pieces[i:i + 2] == winner:
+                if pieces[i : i + 2] == winner:
                     result.append(b"".join(winner))
                     i += 2
                 else:
@@ -64,10 +64,7 @@ def test_incremental_matches_full_rescan(tmp_path, seed):
     # Repeated documents, self-overlap, Unicode bytes, and equal counts exercise
     # stale priorities, changing pair membership, and frequency-weighted deltas.
     rng = random.Random(seed)
-    documents = [
-        "".join(rng.choices("aaaabbbcdefé界🙂 ", k=rng.randrange(1, 45)))
-        for _ in range(25)
-    ]
+    documents = ["".join(rng.choices("aaaabbbcdefé界🙂 ", k=rng.randrange(1, 45))) for _ in range(25)]
     documents += documents[:10] * 3
     path = tmp_path / "corpus.txt"
     path.write_text("<|endoftext|>".join(documents), encoding="utf-8")

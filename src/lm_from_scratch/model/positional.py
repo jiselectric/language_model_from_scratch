@@ -1,28 +1,36 @@
 import torch
 import torch.nn as nn
 
+
 class RotaryPositionalEmbedding(nn.Module):
+    """Rotate adjacent feature pairs using cached position-dependent angles."""
+
     def __init__(
         self,
         theta: float,
         d_k: int,
         max_seq_len: int,
-        device=None,
-    ):
+        device: torch.device | str | None = None,
+    ) -> None:
         super().__init__()
 
-        assert d_k % 2 == 0, "d_k must be even"
+        if d_k <= 0 or d_k % 2:
+            raise ValueError("d_k must be positive and even.")
+        if theta <= 0 or max_seq_len <= 0:
+            raise ValueError("theta and max_seq_len must be positive.")
 
-        # Step 1: Calculate rotation speeds.
+        # One frequency per adjacent feature pair.
         indices = torch.arange(
-            0, d_k, 2,
+            0,
+            d_k,
+            2,
             device=device,
             dtype=torch.float32,
         )
 
         inv_freq = theta ** (-indices / d_k)
 
-        # Step 2: Create all possible token positions.
+        # Cache positions up to the configured context length.
         positions = torch.arange(
             max_seq_len,
             device=device,
@@ -32,7 +40,7 @@ class RotaryPositionalEmbedding(nn.Module):
         # Shape: (max_seq_len, d_k // 2)
         angles = positions[:, None] * inv_freq[None, :]
 
-        # Step 3: Cache the sine and cosine values.
+        # Nonpersistent buffers move with the module but are absent from checkpoints.
         self.register_buffer(
             "cos_cached",
             torch.cos(angles),

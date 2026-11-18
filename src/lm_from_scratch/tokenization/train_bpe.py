@@ -1,20 +1,26 @@
-from typing import List
-import regex as re
-import pickle
-from pathlib import Path
-from collections import Counter, defaultdict
-import heapq
-from multiprocessing import get_context
-import os 
 import argparse
+import heapq
 import json
+import os
+import pickle
+from collections import Counter, defaultdict
+from collections.abc import Sequence
+from multiprocessing import get_context
+from pathlib import Path
 from threading import Event, Thread
 from time import perf_counter
+from typing import BinaryIO
 
 import psutil
+import regex as re
 from tqdm import tqdm
 
 PRETOKEN_PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+
+
+BytePair = tuple[bytes, bytes]
+Pretoken = tuple[bytes, ...]
+ChunkTask = tuple[str | os.PathLike[str], int, int, Sequence[str]]
 
 
 class _PairCandidate:
@@ -22,95 +28,99 @@ class _PairCandidate:
 
     __slots__ = ("frequency", "pair")
 
-    def __init__(self, frequency, pair):
+    def __init__(self, frequency: int, pair: BytePair) -> None:
         self.frequency = frequency
         self.pair = pair
 
-    def __lt__(self, other):
+    def __lt__(self, other: "_PairCandidate") -> bool:
         if self.frequency != other.frequency:
             return self.frequency > other.frequency
         return self.pair > other.pair
 
-def find_chunk_boundaries(file, desired_num_chunks, split_special_token):
-    "Return byte offsets that align with document boundaries"
+
+def find_chunk_boundaries(file: BinaryIO, desired_num_chunks: int, split_special_token: bytes) -> list[int]:
+    """Return byte offsets aligned to occurrences of the document delimiter."""
     if desired_num_chunks < 1:
         raise ValueError("desired num_chunks must be positive.")
 
     if not isinstance(split_special_token, bytes) or not split_special_token:
         raise ValueError("split_special_token must be nonempty bytes.")
-    
+
     # find the file's size in bytes
     file.seek(0, os.SEEK_END)
     file_size = file.tell()
-    
+
     boundaries = {0, file_size}
     for index in range(1, desired_num_chunks):
         position = index * file_size // desired_num_chunks
         file.seek(position)
-        
+
         while True:
             line = file.readline()
-            
+
             # Reached the end of the file
             if not line:
                 boundaries.add(file_size)
                 break
-            
+
             marker_position = line.find(split_special_token)
-            
+
             # Split token index found
             if marker_position != -1:
                 boundaries.add(position + marker_position)
                 break
-                
+
             position += len(line)
-    
+
     return sorted(boundaries)
 
-def count_chunk(task):
+
+def count_chunk(task: ChunkTask) -> Counter[Pretoken]:
     """
-    WORKER FUNCTION
-    
+
     Read one byte range and return its pre-token frequency table.
     This function does not learn BPE merges.
     """
     input_path, start, end, special_tokens = task
-    
+
     # Each worker opens its own file handle.
     with open(input_path, "rb") as file:
         file.seek(start)
         chunk_bytes = file.read(end - start)
-    
-    text = chunk_bytes.decode('utf-8')
-    
+
+    text = chunk_bytes.decode("utf-8")
+
     # Remove special tokens while preserving document boundaries
     if special_tokens:
-        SPECIAL_TOKEN_PAT = "|".join(
+        special_token_pattern = "|".join(
             re.escape(special_token) for special_token in sorted(special_tokens, key=len, reverse=True)
         )
-        segments = re.split(SPECIAL_TOKEN_PAT, text)
+        segments = re.split(special_token_pattern, text)
     else:
         segments = [text]
 
     counts = Counter()
-    
+
     for segment in segments:
         for match in re.finditer(PRETOKEN_PAT, segment):
-            encoded = match.group().encode('utf-8')
-            
+            encoded = match.group().encode("utf-8")
+
             # A key is a tuple of single-byte bytes objects
             pieces = tuple(bytes([byte]) for byte in encoded)
             counts[pieces] += 1
-    
-    return counts 
-    
+
+    return counts
+
+
 def count_pretokens_parallel(
-    input_path, special_tokens, num_workers, split_special_token=None,
-    show_progress=False,
-):
+    input_path: str | os.PathLike[str],
+    special_tokens: Sequence[str],
+    num_workers: int,
+    split_special_token: bytes | None = None,
+    show_progress: bool = False,
+) -> Counter[Pretoken]:
     """
-    PARENT FUNCTION.
-    
+
     Divide the file into tasks, send them to the workers, and combine counts.
     """
     if num_workers < 1:
@@ -118,12 +128,12 @@ def count_pretokens_parallel(
 
     if num_workers == 1 or not special_tokens:
         file_size = Path(input_path).stat().st_size
-        
+
         with tqdm(total=1, desc="Pretokenizing", unit="chunk", disable=not show_progress) as progress:
             counts = count_chunk((input_path, 0, file_size, special_tokens))
             progress.update(1)
         return counts
-    
+
     # The regex uses strings; binary file boundary detection needs ONE byte marker.
     if split_special_token is None:
         split_special_token = special_tokens[0].encode("utf-8")
@@ -136,63 +146,49 @@ def count_pretokens_parallel(
 
     # More chunks than workers lets workers take another task when done.
     num_chunks = num_workers * 4
-    
+
     with open(input_path, "rb") as file:
-        boundaries = find_chunk_boundaries(
-            file,
-            desired_num_chunks=num_chunks,
-            split_special_token=split_special_token
-        )
-    
-    tasks = [
-        (input_path, start, end, tuple(special_tokens))
-        for start, end in zip(boundaries[:-1], boundaries[1:])
-    ]
-    
+        boundaries = find_chunk_boundaries(file, desired_num_chunks=num_chunks, split_special_token=split_special_token)
+
+    tasks = [(input_path, start, end, tuple(special_tokens)) for start, end in zip(boundaries[:-1], boundaries[1:])]
+
     total_counts = Counter()
-    
+
     context = get_context("spawn")
-    
+
     with (
         context.Pool(processes=num_workers) as pool,
         tqdm(total=len(tasks), desc="Pretokenizing", unit="chunk", disable=not show_progress) as progress,
     ):
-        for chunk_counts in pool.imap_unordered(
-            count_chunk,
-            tasks,
-            chunksize=1
-        ):
+        for chunk_counts in pool.imap_unordered(count_chunk, tasks, chunksize=1):
             total_counts.update(chunk_counts)
             progress.update(1)
-    
+
     return total_counts
-    
-    
+
+
 def train_bpe(
-    input_path: str, 
-    vocab_size: int, 
-    special_tokens: List[str],
+    input_path: str | os.PathLike[str],
+    vocab_size: int,
+    special_tokens: list[str],
     num_workers: int = 4,
     show_progress: bool = False,
-):
+) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     # 1. Vocabulary dictionary initialization [0, 255]
-    vocabs = { idx: bytes([idx]) for idx in range(256) }
-    
+    vocab = {idx: bytes([idx]) for idx in range(256)}
+
     special_tokens = list(dict.fromkeys(special_tokens))
     for special_token in special_tokens:
         if not special_token:
             raise ValueError("Special tokens must not be empty.")
 
         token_bytes = special_token.encode("utf-8")
-        if token_bytes not in vocabs.values():
-            vocabs[len(vocabs)] = token_bytes
+        if token_bytes not in vocab.values():
+            vocab[len(vocab)] = token_bytes
 
-    if vocab_size < len(vocabs):
-        raise ValueError(
-            f"vocab_size must be at least {len(vocabs)} "
-            "to hold the initial vocabulary."
-        )
-    
+    if vocab_size < len(vocab):
+        raise ValueError(f"vocab_size must be at least {len(vocab)} to hold the initial vocabulary.")
+
     # 2. Build ONE global frequency table using worker processes
     pretoken_frequency = count_pretokens_parallel(
         input_path=input_path,
@@ -200,12 +196,12 @@ def train_bpe(
         num_workers=num_workers,
         show_progress=show_progress,
     )
-    
+
     # 3. Count pairs once and index the pretokens containing each pair.
     # Stable IDs let us replace sequences without rebuilding the global table.
     merges = []
-    if len(vocabs) == vocab_size:
-        return vocabs, merges
+    if len(vocab) == vocab_size:
+        return vocab, merges
 
     pretokens = list(pretoken_frequency)
     frequencies = list(pretoken_frequency.values())
@@ -222,7 +218,7 @@ def train_bpe(
 
     # 4. Learn merges in the parent process, updating only affected pretokens.
     for _ in tqdm(
-        range(vocab_size - len(vocabs)),
+        range(vocab_size - len(vocab)),
         desc="Learning BPE merges",
         unit="merge",
         disable=not show_progress,
@@ -237,12 +233,12 @@ def train_bpe(
             if show_progress:
                 tqdm.write("No adjacent pairs remain; stopping before the vocabulary target.")
             break
-        
+
         merged_bytes = best_pair[0] + best_pair[1]
-        
-        vocabs[len(vocabs)] = merged_bytes
+
+        vocab[len(vocab)] = merged_bytes
         merges.append(best_pair)
-        
+
         affected_ids = pair_to_pretokens.pop(best_pair)
         changed_pairs = set()
         for pretoken_id in affected_ids:
@@ -250,12 +246,10 @@ def train_bpe(
             frequency = frequencies[pretoken_id]
             before = Counter(zip(pieces, pieces[1:]))
             updated_pieces = []
-            position = 0 
-            
+            position = 0
+
             while position < len(pieces):
-                if (position + 1 < len(pieces) and 
-                    (pieces[position], pieces[position+1]) == best_pair
-                ):
+                if position + 1 < len(pieces) and (pieces[position], pieces[position + 1]) == best_pair:
                     updated_pieces.append(merged_bytes)
                     position += 2
                 else:
@@ -295,22 +289,24 @@ def train_bpe(
         if len(candidates) > max(1024, 4 * len(pair_frequency)):
             candidates = [_PairCandidate(frequency, pair) for pair, frequency in pair_frequency.items()]
             heapq.heapify(candidates)
-    
-    return vocabs, merges
-                    
-def main():
-    repo_root = Path(__file__).resolve().parents[1]
-    parser = argparse.ArgumentParser(description="Train the TinyStories BPE tokenizer.")
+
+    return vocab, merges
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Train a byte-level BPE tokenizer on a local corpus.")
     parser.add_argument(
-        "--input", type=Path,
-        default=repo_root / "data" / "TinyStoriesV2-GPT4-train.txt",
+        "--input",
+        type=Path,
+        required=True,
     )
     parser.add_argument("--vocab-size", type=int, default=10000)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--no-progress", action="store_true", help="Hide training progress bars.")
     parser.add_argument(
-        "--output-dir", type=Path,
-        default=Path(__file__).resolve().parent / "artifacts" / "tinystories_train",
+        "--output-dir",
+        type=Path,
+        required=True,
     )
     args = parser.parse_args()
     if not args.input.is_file():
@@ -330,7 +326,7 @@ def main():
     peak_rss = [0]
     sampling_errors = []
 
-    def sample_memory():
+    def sample_memory() -> None:
         while True:
             rss = 0
             try:
@@ -347,8 +343,7 @@ def main():
                 break
 
     print(
-        f"Training on {args.input.resolve()}\n"
-        f"Vocabulary target: {args.vocab_size}; workers: {args.workers}",
+        f"Training on {args.input.resolve()}\nVocabulary target: {args.vocab_size}; workers: {args.workers}",
         flush=True,
     )
     monitor = Thread(target=sample_memory, daemon=True)

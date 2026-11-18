@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterable
-from typing import IO, Any, BinaryIO
+from typing import Any
 
-import numpy.typing as npt
 import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
@@ -20,8 +18,8 @@ def run_linear(
     Given the weights of a Linear layer, compute the transformation of a batched input.
 
     Args:
-        in_dim (int): The size of the input dimension
-        out_dim (int): The size of the output dimension
+        d_in (int): The size of the input dimension
+        d_out (int): The size of the output dimension
         weights (Float[Tensor, "d_out d_in"]): The linear weights to use
         in_features (Float[Tensor, "... d_in"]): The output tensor to apply the function to
 
@@ -30,7 +28,7 @@ def run_linear(
     """
 
     from lm_from_scratch.model.linear import Linear
-    
+
     layer = Linear(
         in_features=d_in,
         out_features=d_out,
@@ -60,15 +58,16 @@ def run_embedding(
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
     from lm_from_scratch.model.embedding import Embedding
-    
+
     embedding = Embedding(
         num_embeddings=vocab_size,
         embedding_dim=d_model,
         device=weights.device,
         dtype=weights.dtype,
     )
-    embedding.load_state_dict({'weight': weights})
+    embedding.load_state_dict({"weight": weights})
     return embedding(token_ids)
+
 
 def run_swiglu(
     d_model: int,
@@ -92,23 +91,19 @@ def run_swiglu(
     Returns:
         Float[Tensor, "... d_model"]: Output embeddings of the same shape as the input embeddings.
     """
-    # Example:
-    # If your state dict keys match, you can use `load_state_dict()`
-    # swiglu.load_state_dict(weights)
-    # You can also manually assign the weights
-    # swiglu.w1.weight.data = w1_weight
-    # swiglu.w2.weight.data = w2_weight
-    # swiglu.w3.weight.data = w3_weight
     from lm_from_scratch.model.feedforward import SwiGLU
-    
+
     swiglu = SwiGLU(d_model=d_model, d_ff=d_ff)
-    swiglu.load_state_dict({
-        "w1.weight": w1_weight,
-        "w2.weight": w2_weight,
-        "w3.weight": w3_weight,
-    })
+    swiglu.load_state_dict(
+        {
+            "w1.weight": w1_weight,
+            "w2.weight": w2_weight,
+            "w3.weight": w3_weight,
+        }
+    )
     return swiglu(in_features)
-    
+
+
 def run_scaled_dot_product_attention(
     Q: Float[Tensor, " ... queries d_k"],
     K: Float[Tensor, " ... keys d_k"],
@@ -128,9 +123,10 @@ def run_scaled_dot_product_attention(
         Float[Tensor, " ... queries d_v"]: Output of SDPA
     """
     from lm_from_scratch.model.scaled_dot_product_attention import scaled_dot_product_attention
-    
+
     return scaled_dot_product_attention(Q, K, V, mask)
-    
+
+
 def run_multihead_self_attention(
     d_model: int,
     num_heads: int,
@@ -163,12 +159,18 @@ def run_multihead_self_attention(
         implementation with the given QKV projection weights and input features.
     """
     from lm_from_scratch.model.attention import MultiHeadSelfAttention
-    
-    multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads)
-    
-    multi_head_self_attention.load_state_dict({"q_proj.weight": q_proj_weight, "k_proj.weight": k_proj_weight, "v_proj.weight": v_proj_weight, "o_proj.weight": o_proj_weight})
-    return multi_head_self_attention(in_features)
 
+    multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads)
+
+    multi_head_self_attention.load_state_dict(
+        {
+            "q_proj.weight": q_proj_weight,
+            "k_proj.weight": k_proj_weight,
+            "v_proj.weight": v_proj_weight,
+            "o_proj.weight": o_proj_weight,
+        }
+    )
+    return multi_head_self_attention(in_features)
 
 
 def run_multihead_self_attention_with_rope(
@@ -209,10 +211,17 @@ def run_multihead_self_attention_with_rope(
         implementation with the given QKV projection weights and input features.
     """
     from lm_from_scratch.model.attention import MultiHeadSelfAttention
-    
+
     multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads, theta, max_seq_len)
-    
-    multi_head_self_attention.load_state_dict({"q_proj.weight": q_proj_weight, "k_proj.weight": k_proj_weight, "v_proj.weight": v_proj_weight, "o_proj.weight": o_proj_weight})
+
+    multi_head_self_attention.load_state_dict(
+        {
+            "q_proj.weight": q_proj_weight,
+            "k_proj.weight": k_proj_weight,
+            "v_proj.weight": v_proj_weight,
+            "o_proj.weight": o_proj_weight,
+        }
+    )
 
     return multi_head_self_attention(in_features, token_positions)
 
@@ -318,22 +327,25 @@ def run_transformer_block(
         running the Transformer block on the input features while using RoPE.
     """
     from lm_from_scratch.model.transformer_block import TransformerBlock
-    
-    transformer_block = TransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff, theta=theta, max_seq_len=max_seq_len)
-    transformer_block.load_state_dict({
-        "rms_norm1.gains": weights["ln1.weight"],
-        "rms_norm2.gains": weights["ln2.weight"],
 
-        "multi_head_self_attention.q_proj.weight": weights["attn.q_proj.weight"],
-        "multi_head_self_attention.k_proj.weight": weights["attn.k_proj.weight"],
-        "multi_head_self_attention.v_proj.weight": weights["attn.v_proj.weight"],
-        "multi_head_self_attention.o_proj.weight": weights["attn.output_proj.weight"],
-
-        "ffnn.w1.weight": weights["ffn.w1.weight"],
-        "ffnn.w2.weight": weights["ffn.w2.weight"],
-        "ffnn.w3.weight": weights["ffn.w3.weight"],
-    })
+    transformer_block = TransformerBlock(
+        d_model=d_model, num_heads=num_heads, d_ff=d_ff, theta=theta, max_seq_len=max_seq_len
+    )
+    transformer_block.load_state_dict(
+        {
+            "rms_norm1.gains": weights["ln1.weight"],
+            "rms_norm2.gains": weights["ln2.weight"],
+            "multi_head_self_attention.q_proj.weight": weights["attn.q_proj.weight"],
+            "multi_head_self_attention.k_proj.weight": weights["attn.k_proj.weight"],
+            "multi_head_self_attention.v_proj.weight": weights["attn.v_proj.weight"],
+            "multi_head_self_attention.o_proj.weight": weights["attn.output_proj.weight"],
+            "ffnn.w1.weight": weights["ffn.w1.weight"],
+            "ffnn.w2.weight": weights["ffn.w2.weight"],
+            "ffnn.w3.weight": weights["ffn.w3.weight"],
+        }
+    )
     return transformer_block(in_features)
+
 
 def run_transformer_lm(
     vocab_size: int,
@@ -415,17 +427,17 @@ def run_transformer_lm(
         next-word distribution for each token.
     """
     from lm_from_scratch.model.transformer import TransformerLM
-    
-    transformer_LM = TransformerLM(
+
+    transformer_lm = TransformerLM(
         vocab_size=vocab_size,
         context_length=context_length,
         d_model=d_model,
         num_layers=num_layers,
         num_heads=num_heads,
         d_ff=d_ff,
-        rope_theta=rope_theta
+        rope_theta=rope_theta,
     )
-    
+
     state = {
         "embedding.weight": weights["token_embeddings.weight"],
         "rms_norm.gains": weights["ln_final.weight"],
@@ -446,12 +458,10 @@ def run_transformer_lm(
 
     for i in range(num_layers):
         for destination, source in block_keys.items():
-            state[f"transformer_blocks.{i}.{destination}"] = (
-                weights[f"layers.{i}.{source}"]
-            )
-            
-    transformer_LM.load_state_dict(state)
-    return transformer_LM(in_indices)
+            state[f"transformer_blocks.{i}.{destination}"] = weights[f"layers.{i}.{source}"]
+
+    transformer_lm.load_state_dict(state)
+    return transformer_lm(in_indices)
 
 
 def run_rmsnorm(
@@ -475,15 +485,11 @@ def run_rmsnorm(
         RMSNorm of the `in_features`.
     """
     from lm_from_scratch.model.normalization import RMSNorm
-    
-    rmsNorm = RMSNorm(
-        d_model=d_model,
-        eps=eps,
-        device=weights.device,
-        dtype=weights.dtype
-    )
-    rmsNorm.load_state_dict({"gains": weights})
-    return rmsNorm(in_features)
+
+    rms_norm = RMSNorm(d_model=d_model, eps=eps, device=weights.device, dtype=weights.dtype)
+    rms_norm.load_state_dict({"gains": weights})
+    return rms_norm(in_features)
+
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
     """Given a tensor of inputs, return the output of applying SiLU
@@ -497,8 +503,6 @@ def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
         SiLU to each element.
     """
     return in_features * torch.sigmoid(in_features)
-
-
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
@@ -515,20 +519,8 @@ def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, "
         softmax normalizing the specified `dim`.
     """
     from lm_from_scratch.model.softmax import softmax
-    
+
     return softmax(in_features, dim)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def get_tokenizer(
@@ -570,8 +562,8 @@ def run_train_bpe(
         vocab_size (int): Total number of items in the tokenizer's vocabulary (including special tokens).
         special_tokens (list[str]): A list of string special tokens to be added to the tokenizer vocabulary.
             These strings will never be split into multiple tokens, and will always be
-            kept as a single token. If these special tokens occur in the `input_path`,
-            they are treated as any other string.
+            kept as a single token. Their occurrences in `input_path` separate ordinary text segments and are excluded
+            from learned merges.
 
     Returns:
         tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
